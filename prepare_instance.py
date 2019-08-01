@@ -156,6 +156,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq
 
 import copy
 def create_masked_lm_and_ner_predictions(tokens, masked_lm_prob, max_predictions_per_seq, vocab_list, tokens_ent_mask):
+
     tokens = copy.deepcopy(tokens)
     cand_indices_ent = []
 
@@ -382,6 +383,7 @@ def create_instances_from_document(
                     current_chunk_ent = []
                     current_chunk_ent_mask = []
                     current_chunk_wp_to_ent = []
+                    i += 1
                     continue
 
                 tokens = ["[CLS]"] + tokens_a + ["[SEP]"] + tokens_b + ["[SEP]"]
@@ -394,8 +396,19 @@ def create_instances_from_document(
                 # masked_tokens, masked_lm_positions, masked_lm_labels = create_masked_lm_predictions(
                 #     tokens, masked_lm_prob, max_predictions_per_seq, vocab_list)
 
-                masked_tokens, masked_lm_positions, masked_lm_labels = create_masked_lm_and_ner_predictions(
-                    tokens, masked_lm_prob, max_predictions_per_seq, vocab_list, tokens_ent_mask)
+                try:
+                    masked_tokens, masked_lm_positions, masked_lm_labels = create_masked_lm_and_ner_predictions(
+                        tokens, masked_lm_prob, max_predictions_per_seq, vocab_list, tokens_ent_mask)
+                except ValueError as err:
+                    logging.info("ERROR: {}. TOKENS: {}".format(err, tokens))
+                    current_chunk = []
+                    current_length = 0
+                    current_chunk_ent = []
+                    current_chunk_ent_mask = []
+                    current_chunk_wp_to_ent = []
+                    i += 1
+                    continue
+
 
                 masked_tokens_ent, masked_start_ent, masked_norm_labels = create_masked_norm_predictions(tokens, vocab_list, tokens_ent_mask, tokens_wp_to_ent, current_chunk_ent)
 

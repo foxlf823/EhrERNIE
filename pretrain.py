@@ -19,6 +19,7 @@ import umls
 from alphabet import Alphabet
 from norm_utils import init_dict_alphabet, get_dict_index, get_dict_size
 import time
+from tqdm import tqdm
 
 InputFeatures = namedtuple("InputFeatures", "input_ids input_mask segment_ids lm_label_ids is_next input_ids_ent input_mask_ent norm_label_ids")
 
@@ -204,7 +205,7 @@ def pretrain(opt):
     # Prepare model
     model, _ = BertForPreTraining.from_pretrained(opt.bert_dir, num_norm_labels=get_dict_size(dict_alphabet))
     model.to(device)
-    if opt.multi_gpu > 1:
+    if n_gpu > 1:
         model = torch.nn.DataParallel(model)
 
 
@@ -244,33 +245,41 @@ def pretrain(opt):
         sum_orginal_loss = 0
         num_iter = len(train_dataloader)
 
-        for step, batch in enumerate(train_dataloader):
-            batch = tuple(t.to(device) for t in batch)
-            input_ids, input_mask, segment_ids, lm_label_ids, is_next, input_ids_ent, input_mask_ent, norm_label_ids = batch
-            loss, original_loss = model(input_ids, segment_ids, input_mask, lm_label_ids, input_ids_ent, input_mask_ent, is_next, norm_label_ids)
-            if n_gpu > 1:
-                loss = loss.mean() # mean() to average on multi-gpu.
-                original_loss = original_loss.mean()
-            if opt.gradient_accumulation_steps > 1:
-                loss = loss / opt.gradient_accumulation_steps
-                original_loss = original_loss/ opt.gradient_accumulation_steps
+        with tqdm(total=len(train_dataloader), desc=f"Epoch {epoch}") as pbar:
+            for step, batch in enumerate(train_dataloader):
+                batch = tuple(t.to(device) for t in batch)
+                input_ids, input_mask, segment_ids, lm_label_ids, is_next, input_ids_ent, input_mask_ent, norm_label_ids = batch
+                loss, original_loss = model(input_ids, segment_ids, input_mask, lm_label_ids, input_ids_ent, input_mask_ent, is_next, norm_label_ids)
+                if n_gpu > 1:
+                    loss = loss.mean() # mean() to average on multi-gpu.
+                    original_loss = original_loss.mean()
+                if opt.gradient_accumulation_steps > 1:
+                    loss = loss / opt.gradient_accumulation_steps
+                    original_loss = original_loss/ opt.gradient_accumulation_steps
 
-            loss.backward()
+                loss.backward()
 
-            if (step + 1) % opt.gradient_accumulation_steps == 0:
-                optimizer.step()
-                optimizer.zero_grad()
-                global_step += 1
+                tr_loss += loss.item()
+                nb_tr_examples += input_ids.size(0)
+                nb_tr_steps += 1
+                pbar.update(1)
+                mean_loss = tr_loss * opt.gradient_accumulation_steps / nb_tr_steps
+                pbar.set_postfix_str(f"Loss: {mean_loss:.5f}")
 
-            sum_loss += loss.item()
-            sum_orginal_loss += original_loss.item()
+                if (step + 1) % opt.gradient_accumulation_steps == 0:
+                    optimizer.step()
+                    optimizer.zero_grad()
+                    global_step += 1
+
+                sum_loss += loss.item()
+                sum_orginal_loss += original_loss.item()
 
         epoch_finish = time.time()
         logging.info("epoch: %s training finished. Time: %.2fs. loss: %.4f, original_loss %.4f" % (
         epoch, epoch_finish - epoch_start, sum_loss / num_iter, sum_orginal_loss / num_iter))
 
-    # Save a trained model
-    logging.info("** ** * Saving fine-tuned model ** ** * ")
-    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-    output_model_file = os.path.join(opt.save, "pytorch_model.bin")
-    torch.save(model_to_save.state_dict(), str(output_model_file))
+        # Save a trained model
+        logging.info("** ** * Saving fine-tuned model ** ** * ")
+        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+        output_model_file = os.path.join(opt.save, "pytorch_model_{}.bin".format(str(epoch+1)))
+        torch.save(model_to_save.state_dict(), str(output_model_file))

@@ -39,8 +39,10 @@ parser.add_argument("-max_predictions_per_seq", type=int, default=20,
 # for pretrain
 parser.add_argument('-mimic3_dir', type=str, default='')
 parser.add_argument('-text_dir', type=str, default='')
+parser.add_argument('-metamap', type=str, default='')
 parser.add_argument('-metamap_dir', type=str, default='')
 parser.add_argument('-merged_file', type=str, default='')
+parser.add_argument('-metamap_process', type=int, default=1)
 parser.add_argument('-instance_dir', type=str, default='')
 
 # for norm

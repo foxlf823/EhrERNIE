@@ -28,9 +28,9 @@ if __name__ == "__main__":
 
     if opt.whattodo == 'prepare_text':
         # from mimic to raw text
-        # write_discharge_summaries(opt.mimic3_dir, opt.text_dir)
+        write_discharge_summaries(opt.mimic3_dir, opt.text_dir)
         # use metamap to annotate text
-        # apply_metamap_to(opt.text_dir, opt.metamap_dir)
+        apply_metamap_to(opt.text_dir, opt.metamap_dir, opt.metamap, opt.metamap_process)
         # merge raw text and metamap
         merge_text_and_metamap(opt.text_dir, opt.metamap_dir, opt.merged_file)
 

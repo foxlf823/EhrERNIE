@@ -5,17 +5,61 @@ import re
 import logging
 import codecs
 from data_structure import Document, Entity
+import multiprocessing
 
-def apply_metamap_to(input_dir, output_dir):
-    makedir_and_clear(output_dir)
-
-    for input_file_name in os.listdir(input_dir):
+def worker(group, input_dir, output_dir, metamap_dir):
+    for input_file_name in group:
         input_file_path = os.path.join(input_dir, input_file_name)
 
         output_file_path = os.path.join(output_dir, input_file_name)
+        metamap_file = os.path.join(metamap_dir, "bin/metamap")
         os.system(
-            '/Users/feili/tools/metamap/public_mm/bin/metamap -y -I -N --blanklines 0 -R SNOMEDCT_US,MDR -J acab,anab,comd,cgab,dsyn,emod,fndg,inpo,mobd,neop,patf,sosy {} {}'.format(
-                input_file_path, output_file_path))
+            '{} -y -I -N --blanklines 0 -R SNOMEDCT_US,MDR -J acab,anab,comd,cgab,dsyn,emod,fndg,inpo,mobd,neop,patf,sosy {} {}'.format(
+                metamap_file, input_file_path, output_file_path))
+
+def apply_metamap_to(input_dir, output_dir, metamap_dir, metamap_process):
+    makedir_and_clear(output_dir)
+
+    logging.info('read text file ......')
+    input_file_names = []
+    for input_file_name in os.listdir(input_dir):
+        input_file_names.append(input_file_name)
+
+    total_file_num = len(input_file_names)
+    logging.info('totally {} files'.format(total_file_num))
+
+    file_index = []
+    file_num_per_process = total_file_num // metamap_process
+    for group_idx in range(metamap_process):
+        begin  = group_idx*file_num_per_process
+        end = (group_idx+1)*file_num_per_process
+        idx = begin
+        tmp = []
+        while idx < end:
+            tmp.append(input_file_names[idx])
+            idx += 1
+        file_index.append(tmp)
+
+    if end < total_file_num:
+        file_index[-1].extend(input_file_names[end:])
+
+    processes = []
+    for group in file_index:
+        p = multiprocessing.Process(target=worker, args=(group, input_dir, output_dir, metamap_dir))
+        processes.append(p)
+        p.start()
+
+    for p in processes:
+        p.join()
+
+    # for input_file_name in os.listdir(input_dir):
+    #     input_file_path = os.path.join(input_dir, input_file_name)
+    #
+    #     output_file_path = os.path.join(output_dir, input_file_name)
+    #     metamap_file = os.path.join(metamap_dir, "bin/metamap")
+    #     os.system(
+    #         '{} -y -I -N --blanklines 0 -R SNOMEDCT_US,MDR -J acab,anab,comd,cgab,dsyn,emod,fndg,inpo,mobd,neop,patf,sosy {} {}'.format(
+    #             metamap_file, input_file_path, output_file_path))
 
 def load_metamap_result_from_file(file_path):
     re_brackets = re.compile(r'\[[0-9|/]+\]')
@@ -24,6 +68,9 @@ def load_metamap_result_from_file(file_path):
     with codecs.open(file_path, 'r', 'UTF-8') as fp:
         for line in fp.readlines():
             fields = line.strip().split(u"|")
+
+            if len(fields) < 10:
+                continue
 
             if fields[1] != u'MMI':
                 continue
@@ -162,7 +209,8 @@ def merge_text_and_metamap(text_dir, metamap_dir, out_file):
                     tokens = token_from_sent(sent_text, 0)
                     t_num = len(tokens)
 
-                    if t_num < 3 and len(entities) == 0:
+                    # if t_num < 3 and len(entities) == 0:
+                    if t_num < 3:
                         continue
 
                     all_entity_find_tk = True
