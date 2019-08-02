@@ -47,8 +47,21 @@ parser.add_argument('-instance_dir', type=str, default='')
 
 # for norm
 parser.add_argument('-norm_dict', type=str, default='')
-
+parser.add_argument('-config', default='./config.txt')
+parser.add_argument('-types', default=None)
+parser.add_argument('-no_type', action='store_true', default=False)
+parser.add_argument('-train_file', default='./sample')
+parser.add_argument('-dev_file', default='./sample')
+parser.add_argument('-test_file', default='./sample')
+parser.add_argument('-stopword', default='./stopwords.txt')
+parser.add_argument('-norm_number_normalized', action='store_true', default=False)
 
 
 opt = parser.parse_args()
+
+if opt.types:
+    types_ = opt.types.split(',')
+    opt.type_filter = set()
+    for t in types_:
+        opt.type_filter.add(t)
 
